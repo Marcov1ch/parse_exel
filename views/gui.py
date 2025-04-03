@@ -11,6 +11,7 @@ class RemarksApp:
         self.root.title("Свод замечаний DPTRA")
         self.root.geometry("1000x600")
         self.directory = None
+        self.is_authenticated = False
 
         self.tree = ttk.Treeview(self.root)
         self.tree.pack(expand=True, fill=tk.BOTH)
@@ -18,12 +19,12 @@ class RemarksApp:
         button_select_folder = tk.Button(self.root, text="Выбрать папку", command=self.select_folder)
         button_select_folder.pack()
 
-        # Initialize ExcelViewer
         self.excel_viewer = ExcelViewer(self.root)
 
     def select_folder(self):
-        if not self.authenticate_user():
-            return
+        if not self.is_authenticated:
+            if not self.authenticate_user():
+                return
 
         self.directory = filedialog.askdirectory()
         if self.directory:
@@ -33,6 +34,9 @@ class RemarksApp:
         if not self.directory:
             messagebox.showwarning("Предупреждение", "Путь к папке не установлен.")
             return
+
+        for item in self.tree.get_children():
+            self.tree.delete(item)
 
         files = get_files_from_directory(self.directory)
         for file in files:
@@ -54,6 +58,7 @@ class RemarksApp:
         password = simpledialog.askstring("Вход", "Пароль:", show='*')
 
         if authenticate_admin(login, password):
+            self.is_authenticated = True
             return True
         else:
             messagebox.showerror("Ошибка", "Неверный логин или пароль.")
