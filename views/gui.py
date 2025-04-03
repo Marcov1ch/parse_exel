@@ -1,70 +1,64 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk, simpledialog
-from utils.file_handler import load_excel, save_summary, get_files_from_directory
+import os
+from utils.file_handler import load_excel, get_files_from_directory
 from utils.auth import authenticate_admin
-from models.data_model import DataModel
+from excel_viewer import ExcelViewer
 
 class RemarksApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Свод замечаний DPTRA")
-        self.root.geometry("800x600")
+        self.root.geometry("1000x600")
         self.directory = None
 
         self.tree = ttk.Treeview(self.root)
         self.tree.pack(expand=True, fill=tk.BOTH)
 
-        button_add = tk.Button(self.root, text="Добавить файл", command=self.add_file)
-        button_add.pack()
+        button_select_folder = tk.Button(self.root, text="Выбрать папку", command=self.select_folder)
+        button_select_folder.pack()
 
-        button_admin = tk.Button(self.root, text="Войти как администратор", command=self.admin_login)
-        button_admin.pack()
+        # Initialize ExcelViewer
+        self.excel_viewer = ExcelViewer(self.root)
+
+    def select_folder(self):
+        if not self.authenticate_user():
+            return
+
+        self.directory = filedialog.askdirectory()
+        if self.directory:
+            self.load_files()
 
     def load_files(self):
         if not self.directory:
-            messagebox.showwarning("Предупреждение", "Путь к папке не установлен. Войдите как администратор.")
+            messagebox.showwarning("Предупреждение", "Путь к папке не установлен.")
             return
 
         files = get_files_from_directory(self.directory)
         for file in files:
-            file_path = os.path.join(self.directory, file)
-            df = load_excel(file_path)
-            data_model = DataModel(df)
             self.tree.insert('', 'end', text=file, values=('',))
-            for index, row in data_model.dataframe.iterrows():
-                self.tree.insert(file, 'end', text=f"Замечание {index+1}", values=(row.tolist(),))
 
-    def add_file(self):
-        if not self.directory:
-            messagebox.showwarning("Предупреждение", "Путь к папке не установлен. Войдите как администратор.")
-            return
-
-        file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx;*.xls")])
-        if not file_path:
-            return
+    def view_file(self, event):
+        selected_item = self.tree.selection()[0]
+        file_name = self.tree.item(selected_item, 'text')
+        file_path = os.path.join(self.directory, file_name)
 
         try:
             df = load_excel(file_path)
-            file_name = os.path.basename(file_path)
-            save_path = os.path.join(self.directory, file_name)
-            save_summary(df, save_path)
-            data_model = DataModel(df)
-            self.tree.insert('', 'end', text=file_name, values=('',))
-            for index, row in data_model.dataframe.iterrows():
-                self.tree.insert(file_name, 'end', text=f"Замечание {index+1}", values=(row.tolist(),))
-            messagebox.showinfo("Успех", "Файл успешно добавлен!")
+            self.excel_viewer.display_data(df)
         except Exception as e:
-            messagebox.showerror("Ошибка", f"Произошла ошибка: {e}")
+            messagebox.showerror("Ошибка", f"Произошла ошибка при чтении файла: {e}")
 
-    def admin_login(self):
+    def authenticate_user(self):
         login = simpledialog.askstring("Вход", "Логин:", show='*')
         password = simpledialog.askstring("Вход", "Пароль:", show='*')
 
         if authenticate_admin(login, password):
-            self.directory = filedialog.askdirectory()
-            self.load_files()
+            return True
         else:
             messagebox.showerror("Ошибка", "Неверный логин или пароль.")
+            return False
 
     def run(self):
+        self.tree.bind('<Double-1>', self.view_file)
         self.root.mainloop()
